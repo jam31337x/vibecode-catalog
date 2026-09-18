@@ -1,12 +1,15 @@
-# Stream Deck wake-safe recovery (Mac)
+# Stream Deck wake recovery (Mac)
 
-See sources under `tools/streamdeck-wake-safe/`.
+When a Stream Deck (often on an XLR dock hub) stops working after sleep, a USB power-cycle helps — but cycling USB can spike audio. Mute first.
 
-Typical flow:
-1. `audio_protect.py hold-mute` (or equivalent) before USB work
-2. Power-cycle the hub port feeding the Stream Deck / XLR dock (`uhubctl` or IOKit helper)
-3. Wait for HID “Stream Deck” to reappear
-4. Relaunch Elgato Stream Deck.app
-5. `audio_protect.py restore`
+Sources: `tools/streamdeck-wake-safe/`
 
-Install the LaunchAgent example only after rewriting paths for your `$HOME`.
+## Order
+
+1. Hold mute / save output level (`audio_protect.py`).
+2. Power-cycle the hub port that feeds the Deck / dock (`uhubctl` or the C helpers).
+3. Wait until the Stream Deck shows up again in USB/HID.
+4. Open the Elgato Stream Deck app.
+5. Restore audio levels.
+
+Point the LaunchAgent example at your own `$HOME` paths before installing it.

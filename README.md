@@ -1,30 +1,21 @@
 # vibecode-catalog
 
-Public catalog of **reusable prompts** and **sanitized tools** from J M’s Cursor/AI vibecoding — excluding private commercial platform IP.
+Useful prompts and small tools from real setups: Stream Deck wake recovery, home networking, SimHub LED troubleshooting, and a few analysis jobs you can paste into an AI chat.
 
 ## License
 
-**Prosperity Public License 3.0.0** — free for noncommercial use; **30-day commercial trial**, then contact [@jam31337x](https://github.com/jam31337x) for a paid commercial license. See `LICENSE` and `COMMERCIAL.md`.
+[Prosperity Public License 3.0.0](LICENSE) — free for personal and noncommercial use. Commercial use includes a 30-day trial; after that you need a paid license. Details: [COMMERCIAL.md](COMMERCIAL.md).
 
-## What is in here
+## Layout
 
-| Path | Contents |
-|------|----------|
-| `prompts/` | One-shot job prompts: analyze → return clear, decision-ready findings |
-| `recipes/` | How-to notes (no secrets) |
-| `tools/streamdeck-wake-safe/` | Mac Stream Deck wake recovery + hearing-safe mute around USB power-cycle |
+| Folder | What’s inside |
+|--------|----------------|
+| [prompts/](prompts/) | Copy-paste prompts. Each one runs one job and asks for a clear report. |
+| [recipes/](recipes/) | Short how-tos. |
+| [tools/streamdeck-wake-safe/](tools/streamdeck-wake-safe/) | Mac helpers that mute audio, power-cycle the USB hub for a Stream Deck / XLR dock, then restore sound. |
 
-## What is NOT in here
+SimHub Deck installers (separate project): [SimHub-Deck-Releases](https://github.com/jam31337x/SimHub-Deck-Releases).
 
-- Any **MJS Modular Platform / HR-payroll** code, docs, or prompts (private forever)
-- API keys, tokens, passwords, VPN configs, home network secrets
-- Personal astrology materials
-- Unsanitized employer Jira project data (only placeholder Groovy patterns)
+## Author
 
-## Related public releases
-
-- SimHub Deck installers: [jam31337x/SimHub-Deck-Releases](https://github.com/jam31337x/SimHub-Deck-Releases)
-
-## Secret policy
-
-Before any contribution is accepted, strip credentials. Never commit `.env`, keychains, or live hostnames/IPs that are not already public.
+J M ([@jam31337x](https://github.com/jam31337x))

@@ -1,17 +1,17 @@
-# Prompt: Sim racing wheel COM half-open → factory LEDs
+# SimHub: COM half-open, factory LEDs
 
----
+**Job:** Explain and fix this pattern: game still running, SimHub was soft-restarted, wheel/CM LEDs show stock/factory colors, serial looks open but nothing useful comes back (half-open). Soft reset of the wheel port is blocked while the game holds the device.
 
-You are a SimHub + proprietary wheel-base integration engineer. Symptom: after soft-restarting SimHub while the game stays running, wheel/CM LEDs fall back to **factory** mode; bridge reports COM **half-open** / no inbound while port open; host soft-reset of the serial device is blocked during game.
+## Do
 
-## Rules
-- Do **not** recommend mid-session SimHub soft-restart as a fix.
-- Prefer: leave game running; **power-cycle the wheel base**; wait for identify/confirm; verify LED ownership ALLOW.
-- Separate identity latch (confirmed once) from live health flags.
+- Do not recommend another SimHub restart as the fix.
+- Prefer: leave the game up, **power-cycle the wheel base**, wait for identify, confirm Deck owns the LEDs again.
+- Keep “confirmed once” identity separate from “alive right now” health.
 
-## Return format
-1. **Verdict** + confidence.
-2. **Why soft-restart fails** (mechanism, not blame).
-3. **Recovery sequence** (ordered, with “stop if…”).
-4. **Verification signals**: which log lines / HTTP `/v2/ports`-style fields prove Deck owns LEDs again.
-5. **Hard rules for future agents**: 5 bullets.
+## Answer with
+
+1. **Verdict** and confidence.
+2. **Why a soft SimHub restart fails** here (mechanism).
+3. **Recovery steps** with stop conditions.
+4. **How to verify** — which log lines or port-status fields mean LEDs are owned again.
+5. **Rules for next time** — five short bullets.

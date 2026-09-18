@@ -1,20 +1,8 @@
-# Commercial licensing
+# Commercial use
 
-This repository is licensed under the **Prosperity Public License 3.0.0** (see `LICENSE`).
+This project uses the Prosperity Public License 3.0.0.
 
-## What that means
+- Personal, hobby, education, research, and other noncommercial use: free.
+- Commercial use: one 30-day trial per company, then you need a paid license.
 
-- **Noncommercial use** (personal, hobby, education, research, charity, government as defined in the license): free.
-- **Commercial use**: one automatic **30-day trial** per organization, then you need a paid commercial license from the copyright holder.
-
-## Get a commercial license
-
-Contact the copyright holder via GitHub: [@jam31337x](https://github.com/jam31337x)
-
-Please include:
-
-1. Company / product name  
-2. How you will use this material (prompts, tools, or both)  
-3. Expected scale (internal tools vs shipped product)
-
-Unauthorized commercial use after the trial, or redistribution that strips the license notices, violates the terms. The copyright holder runs periodic public checks for misuse.
+To buy a commercial license, open an issue or contact [@jam31337x](https://github.com/jam31337x) on GitHub. Include your company name and how you plan to use the material.

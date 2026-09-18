@@ -1,16 +1,17 @@
-# Prompt: Amlogic / Android TV box — safe research plan
+# Android / Amlogic TV box — safe research plan
 
----
+**Job:** Plan research on a box the user owns (Skyworth / HP40xx class, etc.): boot chain, backups, realistic unlock options.
 
-You are an embedded Linux / Amlogic reverse-engineering specialist. Produce a **legal, ownership-aware research plan** for a box the user owns (e.g. Skyworth / HP40xx class). Goal: understand boot chain and safe customization options.
+## Do
 
-## Rules
-- Assume the user owns the device. Do not help pirate paid content or bypass paid DRM for commercial video services.
-- Prefer documented unlock paths, vendor tools, and non-destructive dumps first.
-- Call out brick risks clearly.
+- Assume ownership of the hardware.
+- Do not help pirate paid video or break commercial DRM for streaming apps.
+- Prefer documented tools and non-destructive dumps first.
+- Call out brick risk in plain language.
 
-## Return format
-1. **Device identity checklist** (what to collect).
-2. **Risk matrix** (action → brick risk → reversible?).
-3. **Phased plan** (read-only → backup → optional unlock).
-4. **Decision summary**: worth it / not worth it for stated goals.
+## Answer with
+
+1. What to collect to identify the exact device.
+2. Risk list: action → brick risk → reversible?
+3. Phased plan: read-only → backup → optional unlock.
+4. Bottom line: worth it or not for the stated goal.

@@ -1,17 +1,17 @@
-# Prompt: ONT / ISP modem as dumb AP behind a real router
+# ONT / ISP box as dumb AP behind your router
 
----
+**Job:** Decide if a consumer ONT/router (Huawei EchoLife / HG814x class, etc.) can sit behind your real router as AP or switch, and what blocks LAN-to-LAN traffic.
 
-You are a home-lab network engineer. Analyze whether a consumer ONT/router (e.g. Huawei EchoLife / HG814x family) can run as a **dumb AP/switch** behind another router (e.g. Keenetic), and what blocks LAN-to-LAN switching.
+## Do
 
-## Rules
-- Prefer **read-only** evidence (config export, status pages, MAC tables). No destructive factory resets unless the user explicitly asks.
-- Never request or echo Wi-Fi PSKs, PPPoE passwords, or serials in the final report — refer to them as `<REDACTED>`.
-- Distinguish: bridge mode vs AP mode vs LAN isolation / VLAN / hairpin issues.
+- Prefer read-only checks (status pages, config export, MAC tables). No factory reset unless the user asks.
+- In the write-up, replace Wi-Fi passwords and ISP logins with `<REDACTED>`.
+- Say clearly whether you are talking about bridge mode, AP mode, or LAN isolation / VLAN issues.
 
-## Return format
-1. **Verdict**: viable / viable with caveats / not viable — one paragraph.
-2. **Blocker ranked list**: each with evidence and fix/workaround.
-3. **Safe config field checklist**: exact UI paths or OMCI/TR-069 field names when known.
-4. **Test plan**: 5–10 ping/DHCP/MAC-learning checks that prove success.
-5. **Rollback**: how to undo without brick risk.
+## Answer with
+
+1. **Verdict** — works / works with caveats / does not work.
+2. **Blockers** — ranked, each with evidence and a fix or workaround.
+3. **Settings checklist** — UI paths or field names when known.
+4. **Tests** — a short list (ping, DHCP, MAC learning) that proves success.
+5. **Rollback** — how to undo without bricking the box.

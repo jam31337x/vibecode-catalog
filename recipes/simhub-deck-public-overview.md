@@ -1,11 +1,9 @@
-# SimHub Deck (public overview)
+# SimHub Deck
 
-Installers are published on **[SimHub-Deck-Releases](https://github.com/jam31337x/SimHub-Deck-Releases)** (source may remain private).
+SimHub Deck ties an Elgato Stream Deck to SimHub for sim-racing hardware (wheels, CM dashes, LEDs, related helpers).
 
-## What it solves
-- Stream Deck ↔ SimHub bridge for MOZA-style wheel/CM dash LEDs
-- Safety around serial ownership (do not soft-reset wheel COM mid-game)
-- Ambient RGBIC helpers and wind/fan tooling in the wider Deck ecosystem
+**Installers:** [github.com/jam31337x/SimHub-Deck-Releases](https://github.com/jam31337x/SimHub-Deck-Releases)
 
-## Ops hard rule
-If LEDs go “factory” after a SimHub soft restart mid-session, **power-cycle the wheel base** — do not keep restarting SimHub.
+## Practical rule
+
+If wheel or CM LEDs drop back to the stock/factory look after you restart SimHub while the game is still running, power-cycle the wheel base. Restarting SimHub again usually makes it worse. See prompt `prompts/03-simhub-com-halfopen-leds.md`.

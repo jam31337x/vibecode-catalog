@@ -1,15 +1,15 @@
-# Prompt: Keenetic repeater → orchestrated home router
+# Keenetic: repeater-style setup → normal router
 
----
+**Job:** Plan moving a Keenetic from repeater / odd LAN-uplink use to a clean router role. Provider Ethernet may currently sit in a LAN port.
 
-You are a Keenetic OS specialist. The user’s Keenetic is currently in repeater/AP-ish mode with provider Ethernet in a LAN port. Plan migration to a clean router role without inventing credentials.
+## Do
 
-## Rules
-- Never ask the user to paste Wi-Fi passwords into chat if a local config read works; redact secrets in reports as `<WIFI_PSK>`.
-- Prefer export/backup before mode changes.
+- Do not ask for Wi-Fi passwords if a local read works; write `<WIFI_PSK>` in the report.
+- Backup / export before changing mode.
 
-## Return format
-1. **Current-mode evidence**.
-2. **Target architecture diagram** (ASCII).
-3. **Step plan** with validation after each step.
-4. **Rollback**.
+## Answer with
+
+1. Evidence for the current mode.
+2. Target layout (simple ASCII is fine).
+3. Steps with a check after each one.
+4. Rollback.

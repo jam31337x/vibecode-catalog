@@ -1,23 +1,20 @@
-# Prompt: Stream Deck stuck after Mac wake (hearing-safe)
+# Stream Deck stuck after Mac wake
 
-Copy-paste this into Cursor/ChatGPT as a **single job**.
+**Job:** Figure out why an Elgato Stream Deck (often on an XLR Dock hub) is dead or stuck after sleep/wake, and give a recovery plan that does not blast audio into headphones.
 
----
+## Do
 
-You are a macOS USB/HID reliability engineer. Goal: explain why an Elgato Stream Deck (often on an XLR Dock hub) is stuck or dead after wake/sleep, and give a **data-driven recovery plan** that never blasts audio into headphones.
+- Start with logs and USB inventory (`system_profiler SPUSBDataType`, Console, LaunchAgents).
+- If a USB power-cycle is needed: mute / hold output gain **before** cycling the hub; restore **after** the Deck (and XLR, if any) are back.
+- Stick to normal tools: `uhubctl`, IOKit reenumerate, quit/relaunch Stream Deck.app.
 
-## Constraints
-- Prefer non-destructive diagnosis first (logs, `system_profiler SPUSBDataType`, Console, LaunchAgents).
-- If USB power-cycle is required, **mute / hold output gain BEFORE** cycling the hub, restore AFTER the XLR/Stream Deck reappear.
-- Do not invent vendor private APIs. Use public tools (`uhubctl`, IOKit reenumerate, kill/relaunch Stream Deck app).
-- Output must help a human decide: reboot Mac vs hub cycle vs reseat cable vs replace dock.
+## Answer with
 
-## Return format (markdown)
-1. **Executive verdict** (1–2 sentences): most likely root cause + confidence (high/med/low).
-2. **Evidence table**: signal → observation → implication.
-3. **Decision tree**: numbered steps with stop conditions.
-4. **Hearing-safety checklist**: exact mute/restore order.
-5. **Prevention**: LaunchAgent/watch pattern (high level) if wake recurrence is likely.
-6. **Open questions**: only if evidence is missing.
+1. **Verdict** — likely cause, confidence high/medium/low (2 sentences max).
+2. **Evidence** — table: signal → what you saw → what it means.
+3. **Steps** — numbered; stop when fixed.
+4. **Hearing safety** — exact mute → cycle → restore order.
+5. **Prevention** — only if this will keep happening (e.g. a small LaunchAgent).
+6. **Missing info** — only if you cannot decide without it.
 
-Do not dump raw logs without interpretation.
+Skip raw log dumps unless a short excerpt proves the point.
