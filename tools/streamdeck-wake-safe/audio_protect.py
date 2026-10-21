@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-"""Store XLR mic gain + main output; mute-first clamp on sudden jumps."""
+"""Store XLR mic gain + main output; clamp reconnect + unexpected output jumps."""
 from __future__ import annotations
 
 import base64
@@ -37,7 +37,7 @@ LOG_PATH = HOME / "Library/Logs/audio-protect.log"
 WL_HOST = "127.0.0.1"
 WL_PORTS = range(1884, 1894)
 
-# Only intervene on XLR reconnect / USB reset — never fight Stream Deck / Mac volume.
+# Safe output after reconnect / unexpected hardware jump.
 RECONNECT_OUTPUT = 0.20
 LEARN_S = 1.75
 POLL_S = 0.05
@@ -46,6 +46,11 @@ NOTIFY_S = 12.0
 # After dock appears, keep outputs forced to RECONNECT_OUTPUT briefly so a
 # late hardware jump cannot bang ears; then release control to the user.
 RECONNECT_GUARD_S = 2.5
+# Sudden CoreAudio output rise vs last accepted sample. Smaller steps (knob)
+# are treated as intentional and only update the baseline.
+JUMP_THRESHOLD = 0.10
+# Ignore further jump logic after we clamp (avoids feedback / thrash).
+JUMP_COOLDOWN_S = 1.5
 
 XLR_NAME = "XLR Dock"
 BOOM_UID = "GDAudioDevice_UID"
@@ -565,6 +570,9 @@ class Protector:
         self.prev_xlr_vol: float | None = None
         self.prev_boom_vol: float | None = None
         self.stable_from = 0.0
+        self._jump_cooldown_until = 0.0
+        # Keep callback alive for CoreAudio; never call set_volume from it
+        # except the existing reconnect mute path (device-list only).
         self._cb = _Listener(self._on_audio)
         self._dev_addr = _Addr(PROP_DEV, SCOPE_GLOB, 0)
         self._vol_addr = _Addr(PROP_VOL, SCOPE_OUT, 0)
@@ -576,9 +584,10 @@ class Protector:
         self._pending_wl: tuple[dict, bool] | None = None
 
     def _on_audio(self, oid, _n, _addrs, _data):
+        # CoreAudio listener: keep shallow. No recursion into restore/jump.
         try:
             oid = int(oid)
-            # Device list change only — never fight live volume knobs.
+            # Device list change only — never fight live volume knobs here.
             if oid == SYS and (holding() or self.saw_missing or self._in_reconnect_guard()):
                 xlr = find_xlr()
                 if xlr:
@@ -592,9 +601,12 @@ class Protector:
     def _in_reconnect_guard(self) -> bool:
         return self.xlr_since > 0 and (time.time() - self.xlr_since) < RECONNECT_GUARD_S
 
+    def _in_jump_cooldown(self) -> bool:
+        return time.time() < self._jump_cooldown_until
+
     def _install_listeners(self, xlr_id: int | None) -> None:
-        # Only watch device add/remove. Do not listen to volume properties —
-        # that was fighting Stream Deck / keyboard volume.
+        # Only watch device add/remove. Volume jumps are detected on the
+        # poll loop so set_volume cannot re-enter the HAL callback stack.
         if not self._sys_listen:
             ca.AudioObjectAddPropertyListener(SYS, byref(self._dev_addr), self._cb, None)
             self._sys_listen = True
@@ -615,7 +627,7 @@ class Protector:
         notify("Audio protect", body)
 
     def restore(self, reason: str, keep_muted: bool) -> None:
-        # On reconnect / USB reset: force outputs to 20%, keep mic gain.
+        # Force outputs to 20%, keep mic gain. Safe from poll thread only.
         levels = reconnect_levels(self.state["saved"])
         log(
             f"restore ({reason}) gain={levels['mic_gain']:.3f} "
@@ -627,6 +639,59 @@ class Protector:
             time.sleep(0.04)
             apply_coreaudio(levels, muted=False)
         self._maybe_notify(f"Output set to 20% ({reason})")
+
+    def _remember_outputs_safe(self) -> None:
+        saved = self.state["saved"]
+        saved["xlr_ca"] = RECONNECT_OUTPUT
+        saved["boom_ca"] = RECONNECT_OUTPUT
+        saved["xlr_hp"] = RECONNECT_OUTPUT
+        saved["boom_level"] = RECONNECT_OUTPUT
+        saved["updated_at"] = now_iso()
+        save_state(self.state)
+
+    def _detect_unexpected_jump(self, ca_snap: dict) -> bool:
+        """Return True if outputs were clamped to 20% for a ≥+10% spike.
+
+        Detection runs on the poll thread only (not the HAL callback) so
+        applying volume cannot recurse into CoreAudio listeners.
+        Baseline floats only — no history buffers.
+        """
+        now = time.time()
+        xlr = ca_snap.get("xlr_ca")
+        boom = ca_snap.get("boom_ca")
+
+        if self._in_jump_cooldown():
+            if xlr is not None:
+                self.prev_xlr_vol = xlr
+            if boom is not None:
+                self.prev_boom_vol = boom
+            return False
+
+        reasons: list[str] = []
+        if xlr is not None and self.prev_xlr_vol is not None:
+            delta = xlr - self.prev_xlr_vol
+            if delta >= JUMP_THRESHOLD:
+                reasons.append(
+                    f"xlr {self.prev_xlr_vol:.0%}→{xlr:.0%} (+{delta:.0%})"
+                )
+        if boom is not None and self.prev_boom_vol is not None:
+            delta = boom - self.prev_boom_vol
+            if delta >= JUMP_THRESHOLD:
+                reasons.append(
+                    f"boom {self.prev_boom_vol:.0%}→{boom:.0%} (+{delta:.0%})"
+                )
+
+        if not reasons:
+            return False
+
+        self._jump_cooldown_until = now + JUMP_COOLDOWN_S
+        self.stable_from = 0.0
+        log(f"unexpected output jump ({'; '.join(reasons)}); clamp→{RECONNECT_OUTPUT:.0%}")
+        self.restore("unexpected-jump", keep_muted=False)
+        self._remember_outputs_safe()
+        self.prev_xlr_vol = RECONNECT_OUTPUT
+        self.prev_boom_vol = RECONNECT_OUTPUT
+        return True
 
     def _learn(self, ca_snap: dict, wl_snap: dict | None) -> None:
         """Remember mic gain only — never use learned output as a clamp ceiling."""
@@ -702,13 +767,20 @@ class Protector:
                     boom is not None and boom > RECONNECT_OUTPUT + 0.01
                 ):
                     apply_coreaudio(levels, muted=False)
+                self.prev_xlr_vol = RECONNECT_OUTPUT
+                self.prev_boom_vol = RECONNECT_OUTPUT
             else:
                 if xlr_id is not None:
                     ensure_xlr_input_hot(xlr_id)
-                self._learn(ca_snap, wl_snap)
+                clamped = self._detect_unexpected_jump(ca_snap)
+                if not clamped:
+                    self._learn(ca_snap, wl_snap)
+                    # Accept gradual moves (< +10%) as the new baseline.
+                    if ca_snap["xlr_ca"] is not None:
+                        self.prev_xlr_vol = ca_snap["xlr_ca"]
+                    if ca_snap["boom_ca"] is not None:
+                        self.prev_boom_vol = ca_snap["boom_ca"]
             self.prev_xlr_id = xlr_id
-            self.prev_xlr_vol = ca_snap["xlr_ca"]
-            self.prev_boom_vol = ca_snap["boom_ca"]
 
     def _wl_loop(self) -> None:
         while True:
@@ -794,6 +866,8 @@ def cmd_status() -> int:
     out = {
         "hold_mute": holding(),
         "reconnect_output": RECONNECT_OUTPUT,
+        "jump_threshold": JUMP_THRESHOLD,
+        "jump_cooldown_s": JUMP_COOLDOWN_S,
         "saved": state["saved"],
         "coreaudio": ca_snap,
         "wavelink": wl_snap,
@@ -859,7 +933,10 @@ def main(argv: list[str]) -> int:
             "  save        store current mic gain (outputs are not clamped)\n"
             "  status      show saved vs live levels\n"
             "  hold-mute   mute outputs until restore (used before USB reset)\n"
-            "  restore     set outputs to 20% and unmute (after USB reset)"
+            "  restore     set outputs to 20% and unmute (after USB reset)\n"
+            "\n"
+            "Listener also clamps unexpected CoreAudio output jumps of +10%\n"
+            "or more back to 20% (gradual knob moves are left alone)."
         )
         return 0
     cmds = {
