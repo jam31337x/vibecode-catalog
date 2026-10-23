@@ -10,7 +10,7 @@
           "FontSize": "11"
         }
       ],
-      "Tooltip": "Mirrors Mac display brightness to the Stream Deck. Keep one copy on a profile (can be hidden under a folder).",
+      "Tooltip": "Shows Mac brightness %. LED sync is the LaunchAgent (install.sh) — not this key.",
       "UUID": "com.jam.brightness-sync.status",
       "SupportedInMultiActions": false
     }
@@ -18,12 +18,12 @@
   "Author": "jam31337x",
   "CodePath": "bin/plugin.js",
   "CodePathMac": "bin/plugin.js",
-  "Description": "Keeps Stream Deck key brightness matched to the MacBook (main display) brightness — 75% Mac → 75% Deck, 0% → 0%, and so on.",
+  "Description": "Optional status key for Mac brightness %. Actual Stream Deck LED sync is installed by install.sh as LaunchAgent com.jam.streamdeck-brightness-sync.",
   "Name": "Brightness Sync",
   "Icon": "imgs/plugin",
   "Category": "System",
   "CategoryIcon": "imgs/plugin",
-  "Version": "1.0.0",
+  "Version": "1.1.0",
   "OS": [
     {
       "Platform": "mac",

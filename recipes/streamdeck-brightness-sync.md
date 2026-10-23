@@ -11,8 +11,10 @@ cd tools/streamdeck-brightness-sync
 ./install.sh
 ```
 
-1. Wait for Stream Deck to reopen.
-2. Add **Brightness Sync** to a profile (folder is fine).
-3. Change Mac display brightness — Deck keys should track 0–100% in lockstep.
+Requires `pip3 install streamdeck` and a Swift toolchain.
 
-The plugin polls the main display via DisplayServices and calls Stream Deck `setBrightness` when the value moves by at least 1%.
+1. LaunchAgent `com.jam.streamdeck-brightness-sync` starts automatically.
+2. Change Mac display brightness — after a short debounce the Stream Deck app restarts briefly and key LEDs match (Elgato removed `setBrightness`; HID needs exclusive access).
+3. Optional: add the **Brightness Sync** status key to show Mac `%` (not required for LED sync).
+
+Logs: `~/Library/Logs/streamdeck-brightness-sync.log`

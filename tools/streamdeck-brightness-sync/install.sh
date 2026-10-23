@@ -1,47 +1,69 @@
-#!/bin/zsh
-# Install Brightness Sync plugin into Elgato Stream Deck (macOS).
+#!/usr/bin/env bash
+# Install Stream Deck ↔ Mac brightness sync (LaunchAgent + HID apply helper).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
-PLUGIN_SRC="$ROOT/com.jam.brightness-sync.sdPlugin"
-PLUGIN_DST="$HOME/Library/Application Support/com.elgato.StreamDeck/Plugins/com.jam.brightness-sync.sdPlugin"
-HELPER_SRC="$ROOT/mac-brightness.swift"
-HELPER_DST="$PLUGIN_SRC/bin/mac-brightness"
+INSTALL_DIR="${HOME}/.local/share/streamdeck-brightness-sync"
+LAUNCH_AGENTS="${HOME}/Library/LaunchAgents"
+LABEL="com.jam.streamdeck-brightness-sync"
+PLIST_DST="${LAUNCH_AGENTS}/${LABEL}.plist"
+PLUGIN_SRC="${ROOT}/com.jam.brightness-sync.sdPlugin"
+PLUGIN_DST="${HOME}/Library/Application Support/com.elgato.StreamDeck/Plugins/com.jam.brightness-sync.sdPlugin"
 
-if [[ "$(uname -s)" != "Darwin" ]]; then
-  echo "macOS only." >&2
+echo "==> Building mac-brightness helper"
+mkdir -p "${ROOT}/bin" "${INSTALL_DIR}/bin"
+swiftc -O -o "${ROOT}/bin/mac-brightness" "${ROOT}/mac-brightness.swift"
+
+echo "==> Installing files to ${INSTALL_DIR}"
+cp -f "${ROOT}/bin/mac-brightness" "${INSTALL_DIR}/bin/mac-brightness"
+cp -f "${ROOT}/apply_brightness.py" "${INSTALL_DIR}/apply_brightness.py"
+cp -f "${ROOT}/sync_daemon.py" "${INSTALL_DIR}/sync_daemon.py"
+chmod +x "${INSTALL_DIR}/bin/mac-brightness" "${INSTALL_DIR}/apply_brightness.py" "${INSTALL_DIR}/sync_daemon.py"
+
+PYTHON="$(command -v python3)"
+if ! "${PYTHON}" -c 'from StreamDeck.DeviceManager import DeviceManager' 2>/dev/null; then
+  echo "error: Python package 'streamdeck' is required (pip3 install streamdeck)" >&2
   exit 1
 fi
 
-if [[ ! -d "/Applications/Elgato Stream Deck.app" ]]; then
-  echo "Elgato Stream Deck app not found in /Applications." >&2
-  exit 1
+echo "==> Installing LaunchAgent ${LABEL}"
+mkdir -p "${LAUNCH_AGENTS}"
+# shellcheck disable=SC2002
+sed \
+  -e "s|__PYTHON__|${PYTHON}|g" \
+  -e "s|__DAEMON__|${INSTALL_DIR}/sync_daemon.py|g" \
+  -e "s|__INSTALL__|${INSTALL_DIR}|g" \
+  -e "s|__HOME__|${HOME}|g" \
+  "${ROOT}/com.jam.streamdeck-brightness-sync.plist" > "${PLIST_DST}"
+
+launchctl bootout "gui/$(id -u)/${LABEL}" 2>/dev/null || true
+launchctl bootstrap "gui/$(id -u)" "${PLIST_DST}"
+launchctl enable "gui/$(id -u)/${LABEL}" 2>/dev/null || true
+launchctl kickstart -k "gui/$(id -u)/${LABEL}" 2>/dev/null || launchctl start "${LABEL}" || true
+
+echo "==> Optional status plugin (title only; sync is the LaunchAgent)"
+if [[ -d "${PLUGIN_SRC}" ]]; then
+  mkdir -p "$(dirname "${PLUGIN_DST}")"
+  rsync -a --delete "${PLUGIN_SRC}/" "${PLUGIN_DST}/"
+  cp -f "${INSTALL_DIR}/bin/mac-brightness" "${PLUGIN_DST}/bin/mac-brightness"
 fi
 
-echo "Compiling mac-brightness helper…"
-mkdir -p "$PLUGIN_SRC/bin"
-swiftc -O -o "$HELPER_DST" "$HELPER_SRC"
-chmod 755 "$HELPER_DST" "$PLUGIN_SRC/bin/plugin.js"
-"$HELPER_DST" >/dev/null
+echo "==> Forcing one apply of current Mac brightness"
+MAC="$("${INSTALL_DIR}/bin/mac-brightness" || true)"
+if [[ -n "${MAC}" ]]; then
+  # Quit briefly so HID apply can run even if Stream Deck is open.
+  osascript -e 'tell application "Stream Deck" to quit' >/dev/null 2>&1 || true
+  for _ in $(seq 1 40); do
+    pgrep -x "Stream Deck" >/dev/null || break
+    sleep 0.1
+  done
+  pkill -x "Stream Deck" 2>/dev/null || true
+  sleep 0.3
+  "${PYTHON}" "${INSTALL_DIR}/apply_brightness.py" "${MAC}" || true
+  open -a "Elgato Stream Deck" 2>/dev/null || true
+fi
 
-echo "Installing plugin → $PLUGIN_DST"
-mkdir -p "$(dirname "$PLUGIN_DST")"
-rm -rf "$PLUGIN_DST"
-# Prefer ditto to preserve exec bits
-ditto "$PLUGIN_SRC" "$PLUGIN_DST"
-# Do not ship a stale helper path; recompile into destination too
-swiftc -O -o "$PLUGIN_DST/bin/mac-brightness" "$HELPER_SRC"
-chmod 755 "$PLUGIN_DST/bin/mac-brightness" "$PLUGIN_DST/bin/plugin.js"
-
-echo "Restarting Stream Deck…"
-killall "Stream Deck" 2>/dev/null || true
-sleep 1
-open -a "Elgato Stream Deck"
-sleep 2
-
-echo
-echo "Installed."
-echo "In Stream Deck software: drag **Brightness Sync** onto a key (can live under a folder)."
-echo "Then move the Mac brightness slider — the Deck keys should follow 1:1 (0–100%)."
-echo
-echo "Mac brightness now: $("$PLUGIN_DST/bin/mac-brightness")%"
+echo "OK — LaunchAgent ${LABEL} installed."
+echo "    Logs: ~/Library/Logs/streamdeck-brightness-sync.log"
+echo "    Note: Stream Deck app restarts briefly when Mac brightness changes"
+echo "          (Elgato removed setBrightness; HID is exclusive while the app runs)."
