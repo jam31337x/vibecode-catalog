@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Mirror Mac main-display brightness onto Stream Deck key LEDs at 90% of Mac
-(i.e. 10% dimmer: Mac 100 → Deck 90; Mac 75 → Deck 68).
+Mirror Mac main-display brightness onto Stream Deck key LEDs at 85% of Mac
+(i.e. 15% dimmer: Mac 100 → Deck 85; Mac 75 → Deck 64).
 
 Official Elgato docs (https://docs.elgato.com/streamdeck/hid/general):
   Set Backlight Brightness = HID Feature Report ID 0x03, Command 0x08, value 0–100.
@@ -24,8 +24,8 @@ POLL_MS = 400
 MIN_DELTA = 1
 DEBOUNCE_S = 0.85
 COOLDOWN_S = 4.0
-# Deck LEDs at 90% of Mac brightness (10% less).
-MAC_TO_DECK_SCALE = 0.90
+# Deck LEDs at 85% of Mac brightness (15% less / 5% dimmer than prior ×0.90).
+MAC_TO_DECK_SCALE = 0.85
 APP_NAME = "Stream Deck"
 APP_BUNDLE = "Elgato Stream Deck"
 
@@ -47,7 +47,7 @@ def log(msg: str) -> None:
 
 
 def map_mac_to_deck(mac_pct: int) -> int:
-    """Mac % → Deck % (10% dimmer, clamped 0–100)."""
+    """Mac % → Deck % (15% dimmer, clamped 0–100)."""
     return max(0, min(100, int(round(mac_pct * MAC_TO_DECK_SCALE))))
 
 
@@ -131,7 +131,7 @@ def run_apply(deck_pct: int) -> subprocess.CompletedProcess[str]:
 
 def apply(mac_pct: int) -> None:
     deck_pct = map_mac_to_deck(mac_pct)
-    log(f"mac {mac_pct}% → deck {deck_pct}% (×{MAC_TO_DECK_SCALE} / 10% dimmer)")
+    log(f"mac {mac_pct}% → deck {deck_pct}% (×{MAC_TO_DECK_SCALE} / 15% dimmer)")
 
     # Official HID path first — no restart if the device can be opened.
     r = run_apply(deck_pct)

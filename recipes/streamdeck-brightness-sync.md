@@ -1,6 +1,6 @@
 # Match Stream Deck brightness to the MacBook screen
 
-Deck LEDs track the laptop display at **90% of Mac brightness** (10% dimmer).
+Deck LEDs track the laptop display at **85% of Mac brightness** (15% dimmer).
 
 Sources: `tools/streamdeck-brightness-sync/`
 
@@ -16,7 +16,7 @@ cd tools/streamdeck-brightness-sync
 Requires `pip3 install streamdeck` and Swift.
 
 1. LaunchAgent `com.jam.streamdeck-brightness-sync` starts automatically.
-2. Change Mac brightness — Deck follows at 90% of Mac (HID; brief Stream Deck restart only if HID is exclusive).
+2. Change Mac brightness — Deck follows at 85% of Mac (HID; brief Stream Deck restart only if HID is exclusive).
 3. Optional status key shows Mac `%` only.
 
 Logs: `~/Library/Logs/streamdeck-brightness-sync.log`
