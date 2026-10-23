@@ -33,6 +33,16 @@ def set_prefs_brightness(pct: int) -> None:
         )
 
 
+EXIT_NO_DEVICE = 2
+EXIT_EXCLUSIVE = 3
+
+
+def count_hid_decks() -> int:
+    from StreamDeck.DeviceManager import DeviceManager
+
+    return len(DeviceManager().enumerate())
+
+
 def set_hid_brightness(pct: int) -> int:
     from StreamDeck.DeviceManager import DeviceManager
 
@@ -58,15 +68,37 @@ def set_hid_brightness(pct: int) -> int:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("percent", type=int, help="0–100")
+    ap.add_argument("percent", type=int, nargs="?", default=None, help="0–100")
     ap.add_argument("--prefs-only", action="store_true")
+    ap.add_argument(
+        "--probe",
+        action="store_true",
+        help="print HID device count and exit (0=ok with devices, 2=none)",
+    )
     args = ap.parse_args()
+
+    if args.probe:
+        n = count_hid_decks()
+        print(n)
+        return 0 if n > 0 else EXIT_NO_DEVICE
+
+    if args.percent is None:
+        ap.error("percent required unless --probe")
     pct = max(0, min(100, int(args.percent)))
     set_prefs_brightness(pct)
     if args.prefs_only:
         print(pct)
         return 0
-    n = set_hid_brightness(pct)
+    try:
+        n = set_hid_brightness(pct)
+    except RuntimeError as exc:
+        msg = str(exc)
+        print(f"error: {msg}", file=sys.stderr)
+        if "no Stream Deck HID devices found" in msg:
+            return EXIT_NO_DEVICE
+        if "Could not open HID" in msg or "exclusive" in msg.lower():
+            return EXIT_EXCLUSIVE
+        return 1
     print(f"{pct} ({n} device(s))")
     return 0
 
@@ -74,6 +106,8 @@ def main() -> int:
 if __name__ == "__main__":
     try:
         raise SystemExit(main())
+    except SystemExit:
+        raise
     except Exception as exc:  # noqa: BLE001
         print(f"error: {exc}", file=sys.stderr)
         raise SystemExit(1)

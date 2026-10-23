@@ -32,7 +32,7 @@ Formula: `deck = min(max_deck, round(mac × anchor_deck / anchor_mac))`
 | [Plugin SDK](https://docs.elgato.com/streamdeck/sdk/references/websocket/plugin/) | None |
 | [HID Set Backlight Brightness](https://docs.elgato.com/streamdeck/hid/general) | Feature report `0x03` / `0x08`, 0–100 |
 
-Tries HID first; brief Stream Deck quit/relaunch only if HID is exclusive.
+Tries HID first; brief Stream Deck quit/relaunch only if a deck is plugged in but HID is exclusive. **If the Stream Deck is unplugged, the daemon idles and does not restart Stream Deck.app.**
 
 ## Install
 

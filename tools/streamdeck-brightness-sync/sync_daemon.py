@@ -8,7 +8,9 @@ Linear across the scale, hard-capped at MAX_DECK%.
 Official Elgato docs (https://docs.elgato.com/streamdeck/hid/general):
   Set Backlight Brightness = HID Feature Report ID 0x03, Command 0x08, value 0–100.
 Plugin SDK has no setBrightness. HID is exclusive while Stream Deck.app runs —
-try HID first; quit/relaunch only if open fails.
+try HID first; quit/relaunch only if a device is present but exclusive.
+
+When no Stream Deck is plugged in: idle — never quit/relaunch Stream Deck.app.
 """
 from __future__ import annotations
 
@@ -24,19 +26,27 @@ POLL_MS = 400
 MIN_DELTA = 1
 DEBOUNCE_S = 0.85
 COOLDOWN_S = 4.0
+# How long to wait between checks when no USB deck is present.
+NO_DEVICE_IDLE_S = 8.0
 APP_NAME = "Stream Deck"
 APP_BUNDLE = "Elgato Stream Deck"
 
-# Defaults: locked manual Deck 42% @ Mac 75%, cap 55%.
 DEFAULT_ANCHOR_MAC = 75
 DEFAULT_ANCHOR_DECK = 42
 DEFAULT_MAX_DECK = 55
+
+EXIT_NO_DEVICE = 2
+EXIT_EXCLUSIVE = 3
 
 HERE = Path(__file__).resolve().parent
 HELPER = HERE / "bin" / "mac-brightness"
 APPLY = HERE / "apply_brightness.py"
 CONFIG = HERE / "config.json"
 LOG = Path.home() / "Library" / "Logs" / "streamdeck-brightness-sync.log"
+
+
+class NoDeviceError(RuntimeError):
+    """USB Stream Deck not present — do not restart the Elgato app."""
 
 
 def log(msg: str) -> None:
@@ -69,7 +79,6 @@ def load_config() -> tuple[int, int, int]:
 
 
 def map_mac_to_deck(mac_pct: int, anchor_mac: int, anchor_deck: int, max_deck: int) -> int:
-    """Linear map locked so Mac anchor_mac% → Deck anchor_deck%, capped at max_deck."""
     scale = anchor_deck / float(anchor_mac)
     return max(0, min(max_deck, int(round(mac_pct * scale))))
 
@@ -106,6 +115,16 @@ def streamdeck_running() -> list[int]:
     if r.returncode != 0:
         return []
     return [int(x) for x in r.stdout.split() if x.strip().isdigit()]
+
+
+def hid_deck_present() -> bool:
+    r = subprocess.run(
+        [sys.executable, str(APPLY), "--probe"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return r.returncode == 0
 
 
 def quit_streamdeck(timeout_s: float = 6.0) -> None:
@@ -160,12 +179,23 @@ def apply(mac_pct: int, anchor_mac: int, anchor_deck: int, max_deck: int) -> Non
         f"(lock {anchor_deck}%@{anchor_mac}% mac, ×{scale:.4f}, cap {max_deck}%)"
     )
 
+    # Never touch Stream Deck.app if hardware is unplugged.
+    if not hid_deck_present():
+        raise NoDeviceError("no Stream Deck HID devices found")
+
     r = run_apply(deck_pct)
     if r.returncode == 0:
         log(f"HID ok (no restart): {r.stdout.strip()}")
         return
 
     err = (r.stderr or r.stdout or "").strip()
+    if r.returncode == EXIT_NO_DEVICE or "no Stream Deck HID" in err:
+        raise NoDeviceError(err or "no Stream Deck HID devices found")
+
+    # Exclusive / open failure: only quit/relaunch if a device is still present.
+    if not hid_deck_present():
+        raise NoDeviceError("no Stream Deck HID devices found")
+
     was_running = bool(streamdeck_running())
     if not was_running:
         log(f"apply failed (app not running): {err}")
@@ -173,11 +203,21 @@ def apply(mac_pct: int, anchor_mac: int, anchor_deck: int, max_deck: int) -> Non
 
     log(f"HID blocked ({err or 'exclusive'}) — quit/relaunch fallback")
     quit_streamdeck()
+
+    if not hid_deck_present():
+        # Unplugged while we held the app — put the app back, do not loop-restart.
+        log("deck unplugged during apply — restoring Stream Deck.app, idling")
+        launch_streamdeck()
+        raise NoDeviceError("no Stream Deck HID devices found")
+
     r = run_apply(deck_pct)
     if r.returncode != 0:
-        log(f"apply failed after quit: {r.stderr.strip() or r.stdout.strip()}")
+        err2 = (r.stderr or r.stdout or "").strip()
+        log(f"apply failed after quit: {err2}")
         launch_streamdeck()
-        raise RuntimeError(r.stderr.strip() or "apply failed")
+        if r.returncode == EXIT_NO_DEVICE or "no Stream Deck HID" in err2:
+            raise NoDeviceError(err2 or "no Stream Deck HID devices found")
+        raise RuntimeError(err2 or "apply failed")
 
     log(f"HID+prefs ok: {r.stdout.strip()}")
     launch_streamdeck()
@@ -208,12 +248,29 @@ def main() -> int:
     pending_since = 0.0
     cooldown_until = 0.0
     last_config_load = 0.0
+    device_missing = False
 
     while True:
         now = time.time()
         if now - last_config_load >= 30.0:
             anchor_mac, anchor_deck, max_deck = load_config()
             last_config_load = now
+
+        # Idle quietly while unplugged — no Stream Deck.app restarts.
+        if not hid_deck_present():
+            if not device_missing:
+                log("no Stream Deck connected — idling (will not restart Stream Deck.app)")
+                device_missing = True
+            last_deck = -1
+            pending_mac = None
+            time.sleep(NO_DEVICE_IDLE_S)
+            continue
+
+        if device_missing:
+            log("Stream Deck reconnected — resuming sync")
+            device_missing = False
+            last_deck = -1
+            pending_mac = None
 
         mac = read_mac_brightness()
         if mac is None:
@@ -246,9 +303,15 @@ def main() -> int:
             last_deck = map_mac_to_deck(pending_mac, anchor_mac, anchor_deck, max_deck)
             pending_mac = None
             cooldown_until = time.time() + COOLDOWN_S
+        except NoDeviceError as exc:
+            log(f"no device: {exc} — idling")
+            device_missing = True
+            last_deck = -1
+            pending_mac = None
+            time.sleep(NO_DEVICE_IDLE_S)
         except Exception as exc:  # noqa: BLE001
             log(f"apply error: {exc}")
-            cooldown_until = time.time() + 2.0
+            cooldown_until = time.time() + 5.0
 
         time.sleep(POLL_MS / 1000.0)
 
