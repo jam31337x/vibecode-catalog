@@ -1,10 +1,8 @@
 # Match Stream Deck brightness to the MacBook screen
 
-Deck LEDs track the laptop display at **85% of Mac brightness** (15% dimmer).
+Deck LEDs follow Mac brightness with a locked calibration: **Mac 75% → Deck 42%** (manual lock), linear scale, **cap 55%**.
 
-Sources: `tools/streamdeck-brightness-sync/`
-
-Official path: [HID Set Backlight Brightness](https://docs.elgato.com/streamdeck/hid/general) (feature report `0x03`/`0x08`). Plugin SDK has no brightness API.
+Sources: `tools/streamdeck-brightness-sync/` · config: `config.json`
 
 ## Setup
 
@@ -15,8 +13,6 @@ cd tools/streamdeck-brightness-sync
 
 Requires `pip3 install streamdeck` and Swift.
 
-1. LaunchAgent `com.jam.streamdeck-brightness-sync` starts automatically.
-2. Change Mac brightness — Deck follows at 85% of Mac (HID; brief Stream Deck restart only if HID is exclusive).
-3. Optional status key shows Mac `%` only.
+Edit `~/.local/share/streamdeck-brightness-sync/config.json` to change the anchor or cap.
 
 Logs: `~/Library/Logs/streamdeck-brightness-sync.log`

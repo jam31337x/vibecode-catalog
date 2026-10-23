@@ -18,6 +18,7 @@ echo "==> Installing files to ${INSTALL_DIR}"
 cp -f "${ROOT}/bin/mac-brightness" "${INSTALL_DIR}/bin/mac-brightness"
 cp -f "${ROOT}/apply_brightness.py" "${INSTALL_DIR}/apply_brightness.py"
 cp -f "${ROOT}/sync_daemon.py" "${INSTALL_DIR}/sync_daemon.py"
+cp -f "${ROOT}/config.json" "${INSTALL_DIR}/config.json"
 chmod +x "${INSTALL_DIR}/bin/mac-brightness" "${INSTALL_DIR}/apply_brightness.py" "${INSTALL_DIR}/sync_daemon.py"
 
 PYTHON="$(command -v python3)"
@@ -48,12 +49,17 @@ if [[ -d "${PLUGIN_SRC}" ]]; then
   cp -f "${INSTALL_DIR}/bin/mac-brightness" "${PLUGIN_DST}/bin/mac-brightness"
 fi
 
-echo "==> Forcing one apply (Deck = 85% of Mac / 15% dimmer)"
+echo "==> Forcing one apply from config.json"
 MAC="$("${INSTALL_DIR}/bin/mac-brightness" || true)"
 if [[ -n "${MAC}" ]]; then
-  DECK="$("${PYTHON}" -c "print(max(0, min(100, round(int('${MAC}') * 0.85))))")"
-  echo "    Mac ${MAC}% → Deck ${DECK}%"
-  # Try HID first; quit only if needed (Stream Deck.app exclusive access).
+  DECK="$("${PYTHON}" - <<PY
+import json
+c=json.load(open("${INSTALL_DIR}/config.json"))
+am,ad,mx=int(c["anchor_mac_pct"]),int(c["anchor_deck_pct"]),int(c["max_deck_pct"])
+print(max(0, min(mx, round(int("${MAC}") * ad / float(am)))))
+PY
+)"
+  echo "    Mac ${MAC}% → Deck ${DECK}% (lock from config, cap applied)"
   if ! "${PYTHON}" "${INSTALL_DIR}/apply_brightness.py" "${DECK}"; then
     osascript -e 'tell application "Stream Deck" to quit' >/dev/null 2>&1 || true
     for _ in $(seq 1 40); do
@@ -68,6 +74,5 @@ if [[ -n "${MAC}" ]]; then
 fi
 
 echo "OK — LaunchAgent ${LABEL} installed."
-echo "    Mapping: Deck = 85% of Mac (15% dimmer)."
+echo "    Calibration: see ${INSTALL_DIR}/config.json"
 echo "    Logs: ~/Library/Logs/streamdeck-brightness-sync.log"
-echo "    HID first (official docs); Stream Deck restarts only if HID is exclusive."

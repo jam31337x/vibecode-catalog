@@ -1,23 +1,38 @@
 # Stream Deck ↔ Mac brightness sync
 
-Keeps Stream Deck key LED brightness matched to the MacBook **main display**, at **85% of Mac** (15% dimmer). Example: Mac 100% → Deck 85%; Mac 75% → Deck 64%.
+Keeps Stream Deck key LED brightness locked to a calibrated point on the MacBook main display, scaled linearly, with a hard cap.
 
-## Official docs (brightness)
+## Calibration (current)
+
+Measured manual Stream Deck+ brightness **42%**, locked to **Mac 75%**:
+
+| Mac | Deck |
+| --- | --- |
+| 0% | 0% |
+| 50% | 28% |
+| 75% | **42%** (anchor) |
+| 100% | **55%** (cap; raw would be 56%) |
+
+Config: `config.json` → `~/.local/share/streamdeck-brightness-sync/config.json`
+
+```json
+{
+  "anchor_mac_pct": 75,
+  "anchor_deck_pct": 42,
+  "max_deck_pct": 55
+}
+```
+
+Formula: `deck = min(max_deck, round(mac × anchor_deck / anchor_mac))`
+
+## Official docs
 
 | Source | Brightness API? |
 | --- | --- |
-| [Plugin SDK / websocket](https://docs.elgato.com/streamdeck/sdk/references/websocket/plugin/) | **None** — no `setBrightness` (removed from modern SDK) |
-| [HID API — Set Backlight Brightness](https://docs.elgato.com/streamdeck/hid/general) | **Yes** — Feature Report `0x03` / command `0x08`, value `0–100` |
+| [Plugin SDK](https://docs.elgato.com/streamdeck/sdk/references/websocket/plugin/) | None |
+| [HID Set Backlight Brightness](https://docs.elgato.com/streamdeck/hid/general) | Feature report `0x03` / `0x08`, 0–100 |
 
-There is **no documented way** to set key brightness through Stream Deck.app or the plugin websocket while the app holds the device. HID requires opening the USB device; on macOS that fails with exclusive access when Stream Deck.app is running. This tool tries HID first (no restart); if blocked, it briefly quits → HID → relaunches.
-
-## How it works
-
-LaunchAgent `com.jam.streamdeck-brightness-sync` polls Mac brightness via `bin/mac-brightness` (DisplayServices). On change (debounced ~0.85s):
-
-1. Map `deck = round(mac × 0.85)`  
-2. Try HID feature report (official path)  
-3. If exclusive: quit Stream Deck.app → HID + write `map_dev_brightness` → relaunch  
+Tries HID first; brief Stream Deck quit/relaunch only if HID is exclusive.
 
 ## Install
 
@@ -28,16 +43,4 @@ bash install.sh
 
 Needs: macOS, `python3` + `pip3 install streamdeck`, Swift (`swiftc`).
 
-No Stream Deck key required. Optional status plugin only shows Mac `%`.
-
-## Logs
-
-`~/Library/Logs/streamdeck-brightness-sync.log`
-
-## Uninstall
-
-```bash
-launchctl bootout "gui/$(id -u)/com.jam.streamdeck-brightness-sync"
-rm -f ~/Library/LaunchAgents/com.jam.streamdeck-brightness-sync.plist
-rm -rf ~/.local/share/streamdeck-brightness-sync
-```
+Logs: `~/Library/Logs/streamdeck-brightness-sync.log`

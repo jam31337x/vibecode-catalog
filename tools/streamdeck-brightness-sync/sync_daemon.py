@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 """
-Mirror Mac main-display brightness onto Stream Deck key LEDs at 85% of Mac
-(i.e. 15% dimmer: Mac 100 → Deck 85; Mac 75 → Deck 64).
+Mirror Mac main-display brightness onto Stream Deck key LEDs.
+
+Calibration (config.json): at Mac ANCHOR_MAC%, Deck = ANCHOR_DECK%.
+Linear across the scale, hard-capped at MAX_DECK%.
 
 Official Elgato docs (https://docs.elgato.com/streamdeck/hid/general):
   Set Backlight Brightness = HID Feature Report ID 0x03, Command 0x08, value 0–100.
-Official Plugin SDK (docs.elgato.com/streamdeck/sdk): no setBrightness / device
-brightness command — confirmed absent from websocket plugin reference.
-
-While Stream Deck.app holds the device, macOS returns exclusive-access on HID open.
-We try HID first (no restart); only if that fails do we briefly quit → HID → relaunch.
+Plugin SDK has no setBrightness. HID is exclusive while Stream Deck.app runs —
+try HID first; quit/relaunch only if open fails.
 """
 from __future__ import annotations
 
+import json
 import os
 import signal
 import subprocess
@@ -24,14 +24,18 @@ POLL_MS = 400
 MIN_DELTA = 1
 DEBOUNCE_S = 0.85
 COOLDOWN_S = 4.0
-# Deck LEDs at 85% of Mac brightness (15% less / 5% dimmer than prior ×0.90).
-MAC_TO_DECK_SCALE = 0.85
 APP_NAME = "Stream Deck"
 APP_BUNDLE = "Elgato Stream Deck"
+
+# Defaults: locked manual Deck 42% @ Mac 75%, cap 55%.
+DEFAULT_ANCHOR_MAC = 75
+DEFAULT_ANCHOR_DECK = 42
+DEFAULT_MAX_DECK = 55
 
 HERE = Path(__file__).resolve().parent
 HELPER = HERE / "bin" / "mac-brightness"
 APPLY = HERE / "apply_brightness.py"
+CONFIG = HERE / "config.json"
 LOG = Path.home() / "Library" / "Logs" / "streamdeck-brightness-sync.log"
 
 
@@ -46,9 +50,28 @@ def log(msg: str) -> None:
     print(line, flush=True)
 
 
-def map_mac_to_deck(mac_pct: int) -> int:
-    """Mac % → Deck % (15% dimmer, clamped 0–100)."""
-    return max(0, min(100, int(round(mac_pct * MAC_TO_DECK_SCALE))))
+def load_config() -> tuple[int, int, int]:
+    anchor_mac = DEFAULT_ANCHOR_MAC
+    anchor_deck = DEFAULT_ANCHOR_DECK
+    max_deck = DEFAULT_MAX_DECK
+    if CONFIG.is_file():
+        try:
+            raw = json.loads(CONFIG.read_text(encoding="utf-8"))
+            anchor_mac = int(raw.get("anchor_mac_pct", anchor_mac))
+            anchor_deck = int(raw.get("anchor_deck_pct", anchor_deck))
+            max_deck = int(raw.get("max_deck_pct", max_deck))
+        except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
+            log(f"config read failed, using defaults: {exc}")
+    anchor_mac = max(1, min(100, anchor_mac))
+    anchor_deck = max(0, min(100, anchor_deck))
+    max_deck = max(0, min(100, max_deck))
+    return anchor_mac, anchor_deck, max_deck
+
+
+def map_mac_to_deck(mac_pct: int, anchor_mac: int, anchor_deck: int, max_deck: int) -> int:
+    """Linear map locked so Mac anchor_mac% → Deck anchor_deck%, capped at max_deck."""
+    scale = anchor_deck / float(anchor_mac)
+    return max(0, min(max_deck, int(round(mac_pct * scale))))
 
 
 def read_mac_brightness() -> int | None:
@@ -129,11 +152,14 @@ def run_apply(deck_pct: int) -> subprocess.CompletedProcess[str]:
     )
 
 
-def apply(mac_pct: int) -> None:
-    deck_pct = map_mac_to_deck(mac_pct)
-    log(f"mac {mac_pct}% → deck {deck_pct}% (×{MAC_TO_DECK_SCALE} / 15% dimmer)")
+def apply(mac_pct: int, anchor_mac: int, anchor_deck: int, max_deck: int) -> None:
+    deck_pct = map_mac_to_deck(mac_pct, anchor_mac, anchor_deck, max_deck)
+    scale = anchor_deck / float(anchor_mac)
+    log(
+        f"mac {mac_pct}% → deck {deck_pct}% "
+        f"(lock {anchor_deck}%@{anchor_mac}% mac, ×{scale:.4f}, cap {max_deck}%)"
+    )
 
-    # Official HID path first — no restart if the device can be opened.
     r = run_apply(deck_pct)
     if r.returncode == 0:
         log(f"HID ok (no restart): {r.stdout.strip()}")
@@ -145,7 +171,6 @@ def apply(mac_pct: int) -> None:
         log(f"apply failed (app not running): {err}")
         raise RuntimeError(err or "apply failed")
 
-    # Plugin SDK has no brightness API; Stream Deck.app holds exclusive HID.
     log(f"HID blocked ({err or 'exclusive'}) — quit/relaunch fallback")
     quit_streamdeck()
     r = run_apply(deck_pct)
@@ -172,21 +197,31 @@ def main() -> int:
         log(f"missing apply script: {APPLY}")
         return 1
 
+    anchor_mac, anchor_deck, max_deck = load_config()
+    log(
+        f"calibration: Mac {anchor_mac}% → Deck {anchor_deck}%, "
+        f"cap {max_deck}% (scale {anchor_deck / float(anchor_mac):.4f})"
+    )
+
     last_deck = -1
     pending_mac: int | None = None
     pending_since = 0.0
     cooldown_until = 0.0
+    last_config_load = 0.0
 
     while True:
         now = time.time()
+        if now - last_config_load >= 30.0:
+            anchor_mac, anchor_deck, max_deck = load_config()
+            last_config_load = now
+
         mac = read_mac_brightness()
         if mac is None:
             time.sleep(POLL_MS / 1000.0)
             continue
 
-        deck = map_mac_to_deck(mac)
+        deck = map_mac_to_deck(mac, anchor_mac, anchor_deck, max_deck)
 
-        # After relaunch, ignore churn briefly — but do not forget the target.
         if now < cooldown_until:
             time.sleep(POLL_MS / 1000.0)
             continue
@@ -207,8 +242,8 @@ def main() -> int:
             continue
 
         try:
-            apply(pending_mac)
-            last_deck = map_mac_to_deck(pending_mac)
+            apply(pending_mac, anchor_mac, anchor_deck, max_deck)
+            last_deck = map_mac_to_deck(pending_mac, anchor_mac, anchor_deck, max_deck)
             pending_mac = None
             cooldown_until = time.time() + COOLDOWN_S
         except Exception as exc:  # noqa: BLE001
