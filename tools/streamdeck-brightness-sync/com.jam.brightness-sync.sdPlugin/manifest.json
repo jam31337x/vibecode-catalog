@@ -1,0 +1,40 @@
+{
+  "Actions": [
+    {
+      "Icon": "imgs/action",
+      "Name": "Brightness Sync",
+      "States": [
+        {
+          "Image": "imgs/key",
+          "TitleAlignment": "middle",
+          "FontSize": "11"
+        }
+      ],
+      "Tooltip": "Mirrors Mac display brightness to the Stream Deck. Keep one copy on a profile (can be hidden under a folder).",
+      "UUID": "com.jam.brightness-sync.status",
+      "SupportedInMultiActions": false
+    }
+  ],
+  "Author": "jam31337x",
+  "CodePath": "bin/plugin.js",
+  "CodePathMac": "bin/plugin.js",
+  "Description": "Keeps Stream Deck key brightness matched to the MacBook (main display) brightness — 75% Mac → 75% Deck, 0% → 0%, and so on.",
+  "Name": "Brightness Sync",
+  "Icon": "imgs/plugin",
+  "Category": "System",
+  "CategoryIcon": "imgs/plugin",
+  "Version": "1.0.0",
+  "OS": [
+    {
+      "Platform": "mac",
+      "MinimumVersion": "12.0"
+    }
+  ],
+  "SDKVersion": 2,
+  "Software": {
+    "MinimumVersion": "6.0"
+  },
+  "Nodejs": {
+    "Version": "24"
+  }
+}
