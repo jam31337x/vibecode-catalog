@@ -1,6 +1,6 @@
 # Stream Deck ↔ Mac brightness sync
 
-Keeps Stream Deck key LED brightness matched to the MacBook **main display**, at **75% of Mac** (25% dimmer). Example: Mac 100% → Deck 75%; Mac 80% → Deck 60%.
+Keeps Stream Deck key LED brightness matched to the MacBook **main display**, at **90% of Mac** (10% dimmer). Example: Mac 100% → Deck 90%; Mac 75% → Deck 68%.
 
 ## Official docs (brightness)
 
@@ -15,7 +15,7 @@ There is **no documented way** to set key brightness through Stream Deck.app or 
 
 LaunchAgent `com.jam.streamdeck-brightness-sync` polls Mac brightness via `bin/mac-brightness` (DisplayServices). On change (debounced ~0.85s):
 
-1. Map `deck = round(mac × 0.75)`  
+1. Map `deck = round(mac × 0.90)`  
 2. Try HID feature report (official path)  
 3. If exclusive: quit Stream Deck.app → HID + write `map_dev_brightness` → relaunch  
 

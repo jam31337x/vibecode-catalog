@@ -48,10 +48,10 @@ if [[ -d "${PLUGIN_SRC}" ]]; then
   cp -f "${INSTALL_DIR}/bin/mac-brightness" "${PLUGIN_DST}/bin/mac-brightness"
 fi
 
-echo "==> Forcing one apply (Deck = 75% of Mac / 25% dimmer)"
+echo "==> Forcing one apply (Deck = 90% of Mac / 10% dimmer)"
 MAC="$("${INSTALL_DIR}/bin/mac-brightness" || true)"
 if [[ -n "${MAC}" ]]; then
-  DECK="$("${PYTHON}" -c "print(max(0, min(100, round(int('${MAC}') * 0.75))))")"
+  DECK="$("${PYTHON}" -c "print(max(0, min(100, round(int('${MAC}') * 0.90))))")"
   echo "    Mac ${MAC}% → Deck ${DECK}%"
   # Try HID first; quit only if needed (Stream Deck.app exclusive access).
   if ! "${PYTHON}" "${INSTALL_DIR}/apply_brightness.py" "${DECK}"; then
@@ -68,6 +68,6 @@ if [[ -n "${MAC}" ]]; then
 fi
 
 echo "OK — LaunchAgent ${LABEL} installed."
-echo "    Mapping: Deck = 75% of Mac (25% dimmer)."
+echo "    Mapping: Deck = 90% of Mac (10% dimmer)."
 echo "    Logs: ~/Library/Logs/streamdeck-brightness-sync.log"
 echo "    HID first (official docs); Stream Deck restarts only if HID is exclusive."
