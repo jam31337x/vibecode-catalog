@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 """
-Mirror Mac main-display brightness onto Stream Deck key LEDs.
+Mirror Mac main-display brightness onto Stream Deck key LEDs at 75% of Mac
+(i.e. 25% dimmer: Mac 100 → Deck 75).
 
-Stream Deck software 6+/7 removed the plugin `setBrightness` API, and while the
-official app is open it holds exclusive HID access — so live LED updates require
-a brief quit → HID feature-report → prefs → relaunch cycle.
+Official Elgato docs (https://docs.elgato.com/streamdeck/hid/general):
+  Set Backlight Brightness = HID Feature Report ID 0x03, Command 0x08, value 0–100.
+Official Plugin SDK (docs.elgato.com/streamdeck/sdk): no setBrightness / device
+brightness command — confirmed absent from websocket plugin reference.
 
-Elgato removed setBrightness; prefs-only updates do not drive the hardware.
+While Stream Deck.app holds the device, macOS returns exclusive-access on HID open.
+We try HID first (no restart); only if that fails do we briefly quit → HID → relaunch.
 """
 from __future__ import annotations
 
@@ -19,10 +22,10 @@ from pathlib import Path
 
 POLL_MS = 400
 MIN_DELTA = 1
-# Wait until Mac brightness stops moving before applying (avoids restart spam).
 DEBOUNCE_S = 0.85
-# Ignore Mac readings right after we relaunch Stream Deck.
 COOLDOWN_S = 4.0
+# Deck LEDs at 75% of Mac brightness (25% less).
+MAC_TO_DECK_SCALE = 0.75
 APP_NAME = "Stream Deck"
 APP_BUNDLE = "Elgato Stream Deck"
 
@@ -41,6 +44,11 @@ def log(msg: str) -> None:
     except OSError:
         pass
     print(line, flush=True)
+
+
+def map_mac_to_deck(mac_pct: int) -> int:
+    """Mac % → Deck % (25% dimmer, clamped 0–100)."""
+    return max(0, min(100, int(round(mac_pct * MAC_TO_DECK_SCALE))))
 
 
 def read_mac_brightness() -> int | None:
@@ -112,35 +120,47 @@ def launch_streamdeck() -> None:
     )
 
 
-def apply(pct: int) -> None:
-    was_running = bool(streamdeck_running())
-    if was_running:
-        log(f"apply {pct}% — quitting Stream Deck for HID access")
-        quit_streamdeck()
-    else:
-        log(f"apply {pct}% — Stream Deck not running, HID direct")
-
-    r = subprocess.run(
-        [sys.executable, str(APPLY), str(pct)],
+def run_apply(deck_pct: int) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, str(APPLY), str(deck_pct)],
         capture_output=True,
         text=True,
         check=False,
     )
+
+
+def apply(mac_pct: int) -> None:
+    deck_pct = map_mac_to_deck(mac_pct)
+    log(f"mac {mac_pct}% → deck {deck_pct}% (×{MAC_TO_DECK_SCALE} / 25% dimmer)")
+
+    # Official HID path first — no restart if the device can be opened.
+    r = run_apply(deck_pct)
+    if r.returncode == 0:
+        log(f"HID ok (no restart): {r.stdout.strip()}")
+        return
+
+    err = (r.stderr or r.stdout or "").strip()
+    was_running = bool(streamdeck_running())
+    if not was_running:
+        log(f"apply failed (app not running): {err}")
+        raise RuntimeError(err or "apply failed")
+
+    # Plugin SDK has no brightness API; Stream Deck.app holds exclusive HID.
+    log(f"HID blocked ({err or 'exclusive'}) — quit/relaunch fallback")
+    quit_streamdeck()
+    r = run_apply(deck_pct)
     if r.returncode != 0:
-        log(f"apply failed: {r.stderr.strip() or r.stdout.strip()}")
-        if was_running:
-            launch_streamdeck()
+        log(f"apply failed after quit: {r.stderr.strip() or r.stdout.strip()}")
+        launch_streamdeck()
         raise RuntimeError(r.stderr.strip() or "apply failed")
 
     log(f"HID+prefs ok: {r.stdout.strip()}")
-    if was_running:
-        launch_streamdeck()
-        # Wait until app is back so we don't immediately re-trigger.
-        deadline = time.time() + 15.0
-        while time.time() < deadline:
-            if streamdeck_running():
-                break
-            time.sleep(0.1)
+    launch_streamdeck()
+    deadline = time.time() + 15.0
+    while time.time() < deadline:
+        if streamdeck_running():
+            break
+        time.sleep(0.1)
 
 
 def main() -> int:
@@ -152,31 +172,32 @@ def main() -> int:
         log(f"missing apply script: {APPLY}")
         return 1
 
-    last_applied = -1
-    pending: int | None = None
+    last_deck = -1
+    pending_mac: int | None = None
     pending_since = 0.0
     cooldown_until = 0.0
 
     while True:
         now = time.time()
-        pct = read_mac_brightness()
-        if pct is None:
+        mac = read_mac_brightness()
+        if mac is None:
             time.sleep(POLL_MS / 1000.0)
             continue
 
+        deck = map_mac_to_deck(mac)
+
+        # After relaunch, ignore churn briefly — but do not forget the target.
         if now < cooldown_until:
-            last_applied = pct
-            pending = None
             time.sleep(POLL_MS / 1000.0)
             continue
 
-        if last_applied >= 0 and abs(pct - last_applied) < MIN_DELTA:
-            pending = None
+        if last_deck >= 0 and abs(deck - last_deck) < MIN_DELTA:
+            pending_mac = None
             time.sleep(POLL_MS / 1000.0)
             continue
 
-        if pending is None or pct != pending:
-            pending = pct
+        if pending_mac is None or mac != pending_mac:
+            pending_mac = mac
             pending_since = now
             time.sleep(POLL_MS / 1000.0)
             continue
@@ -186,9 +207,9 @@ def main() -> int:
             continue
 
         try:
-            apply(pending)
-            last_applied = pending
-            pending = None
+            apply(pending_mac)
+            last_deck = map_mac_to_deck(pending_mac)
+            pending_mac = None
             cooldown_until = time.time() + COOLDOWN_S
         except Exception as exc:  # noqa: BLE001
             log(f"apply error: {exc}")

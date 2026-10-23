@@ -48,22 +48,26 @@ if [[ -d "${PLUGIN_SRC}" ]]; then
   cp -f "${INSTALL_DIR}/bin/mac-brightness" "${PLUGIN_DST}/bin/mac-brightness"
 fi
 
-echo "==> Forcing one apply of current Mac brightness"
+echo "==> Forcing one apply (Deck = 75% of Mac / 25% dimmer)"
 MAC="$("${INSTALL_DIR}/bin/mac-brightness" || true)"
 if [[ -n "${MAC}" ]]; then
-  # Quit briefly so HID apply can run even if Stream Deck is open.
-  osascript -e 'tell application "Stream Deck" to quit' >/dev/null 2>&1 || true
-  for _ in $(seq 1 40); do
-    pgrep -x "Stream Deck" >/dev/null || break
-    sleep 0.1
-  done
-  pkill -x "Stream Deck" 2>/dev/null || true
-  sleep 0.3
-  "${PYTHON}" "${INSTALL_DIR}/apply_brightness.py" "${MAC}" || true
-  open -a "Elgato Stream Deck" 2>/dev/null || true
+  DECK="$("${PYTHON}" -c "print(max(0, min(100, round(int('${MAC}') * 0.75))))")"
+  echo "    Mac ${MAC}% → Deck ${DECK}%"
+  # Try HID first; quit only if needed (Stream Deck.app exclusive access).
+  if ! "${PYTHON}" "${INSTALL_DIR}/apply_brightness.py" "${DECK}"; then
+    osascript -e 'tell application "Stream Deck" to quit' >/dev/null 2>&1 || true
+    for _ in $(seq 1 40); do
+      pgrep -x "Stream Deck" >/dev/null || break
+      sleep 0.1
+    done
+    pkill -x "Stream Deck" 2>/dev/null || true
+    sleep 0.3
+    "${PYTHON}" "${INSTALL_DIR}/apply_brightness.py" "${DECK}" || true
+    open -a "Elgato Stream Deck" 2>/dev/null || true
+  fi
 fi
 
 echo "OK — LaunchAgent ${LABEL} installed."
+echo "    Mapping: Deck = 75% of Mac (25% dimmer)."
 echo "    Logs: ~/Library/Logs/streamdeck-brightness-sync.log"
-echo "    Note: Stream Deck app restarts briefly when Mac brightness changes"
-echo "          (Elgato removed setBrightness; HID is exclusive while the app runs)."
+echo "    HID first (official docs); Stream Deck restarts only if HID is exclusive."

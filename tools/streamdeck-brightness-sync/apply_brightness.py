@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
-"""Apply absolute key brightness (0–100) to Elgato Stream Deck devices via HID.
+"""Apply absolute key brightness (0–100) via official Stream Deck HID API.
 
-Requires exclusive HID access — the official Stream Deck app must not be holding
-the device (quit it first). Also writes map_dev_brightness so the app restores
-the same level on next launch.
+Docs: https://docs.elgato.com/streamdeck/hid/general
+  Feature Report ID 0x03, Command 0x08, brightness UINT8 0x00–0x64 (0–100).
+
+The Plugin SDK has no brightness command. Opening HID usually fails while
+Stream Deck.app holds exclusive access — caller may quit the app first.
+Also writes map_dev_brightness so the app restores the same level on launch.
 """
 from __future__ import annotations
 
