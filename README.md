@@ -13,7 +13,6 @@ Useful prompts and small tools from real setups: Stream Deck wake recovery, home
 | [prompts/](prompts/) | Copy-paste prompts. Each one runs one job and asks for a clear report. |
 | [recipes/](recipes/) | Short how-tos. |
 | [tools/streamdeck-wake-safe/](tools/streamdeck-wake-safe/) | Mac helpers that mute audio, power-cycle the USB hub for a Stream Deck / XLR dock, then restore sound. |
-| [tools/streamdeck-brightness-sync/](tools/streamdeck-brightness-sync/) | LaunchAgent: Deck LEDs locked 42%@Mac75%, linear, cap 55% (HID). |
 
 SimHub Deck installers (separate project): [SimHub-Deck-Releases](https://github.com/jam31337x/SimHub-Deck-Releases).
 
